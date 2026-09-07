@@ -27,6 +27,19 @@ import static org.assertj.core.api.Assertions.assertThatCode;
  * mirror at all -- unlike every other structural rule on this entity. This
  * was the exact "Financial statement BALANCE_SHEET does not match account
  * class REVENUE" message the user hit live.
+ *
+ * Found and fixed later (2026-09-07): validateCategoryMatchesClass() itself
+ * re-derived the class/category match with a hand-rolled, name-substring
+ * heuristic instead of calling AccountCategory.belongsToClass() (the real
+ * mapping). That heuristic silently rejected 15 of the 44 categories --
+ * e.g. CASH_AND_EQUIVALENTS/ASSET -- as "mismatched" even though they are
+ * perfectly valid, which is exactly what the user hit editing an existing
+ * account. validateEntity_allValidClassStatementPairings_succeed() below
+ * had masked this for months because it only tried ONE representative
+ * category per class, and every one it picked happened to satisfy the
+ * broken heuristic by coincidence. validateEntity_everyCategory_matchesItsOwnClass()
+ * now iterates ALL AccountCategory values so a future regression like this
+ * can't hide behind a lucky representative sample again.
  */
 class ChartOfAccountsEntityTest {
 
@@ -134,6 +147,37 @@ class ChartOfAccountsEntityTest {
 
             assertThatCode(account::validateEntity)
                     .as("class=%s category=%s statement=%s", c.accountClass(), c.category(), c.statement())
+                    .doesNotThrowAnyException();
+        }
+    }
+
+    @Test
+    @DisplayName("validateEntity() accepts EVERY AccountCategory paired with its own real AccountClass (REGRESSION GUARD)")
+    void validateEntity_everyCategory_matchesItsOwnClass() {
+        // Exhaustive, not representative: the previous test only tried one
+        // category per class, which is exactly how the name-substring bug
+        // in validateCategoryMatchesClass() stayed invisible -- every
+        // representative it happened to use (CURRENT_ASSET,
+        // CURRENT_LIABILITY, SHARE_CAPITAL, OPERATING_REVENUE,
+        // OPERATING_EXPENSE, COST_OF_SALES) satisfied the broken heuristic
+        // by coincidence, while categories like CASH_AND_EQUIVALENTS or
+        // ACCOUNTS_PAYABLE did not. Looping over every enum value pins down
+        // the real contract: validateEntity() must accept ANY category
+        // together with the class it actually declares
+        // (AccountCategory.getAccountClass()), with no exceptions.
+        for (AccountCategory category : AccountCategory.values()) {
+            ChartOfAccounts account = validAccount();
+            account.setAccountClass(category.getAccountClass());
+            account.setAccountCategory(category);
+            account.setFinancialStatement(
+                    switch (category.getAccountClass()) {
+                        case ASSET, LIABILITY, EQUITY -> FinancialStatement.BALANCE_SHEET;
+                        case REVENUE, EXPENSE, COST -> FinancialStatement.INCOME_STATEMENT;
+                    }
+            );
+
+            assertThatCode(account::validateEntity)
+                    .as("category=%s (declared class=%s)", category, category.getAccountClass())
                     .doesNotThrowAnyException();
         }
     }

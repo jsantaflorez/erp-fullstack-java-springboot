@@ -246,29 +246,36 @@ public class ChartOfAccounts extends BaseEntity implements Serializable {
 
     /**
      * Validates that the account category matches the account class.
+     *
+     * BUG FIX (2026-09-07): this used to re-derive the class/category match
+     * with its own hand-rolled switch, guessing from the ENUM NAME (e.g.
+     * "does accountCategory.name() contain the substring ASSET?") instead
+     * of calling AccountCategory.belongsToClass() -- the one real mapping
+     * already used everywhere else (ChartOfAccountService's own pre-checks,
+     * the /metadata category filtering). That guess was wrong for any
+     * category whose name doesn't happen to contain its class's name:
+     * CASH_AND_EQUIVALENTS, ACCOUNTS_RECEIVABLE, INVENTORY,
+     * PREPAID_EXPENSES, PROPERTY_PLANT_EQUIPMENT, ACCUMULATED_DEPRECIATION
+     * (all ASSET), ACCOUNTS_PAYABLE, ACCRUED_EXPENSES, SHORT_TERM_DEBT,
+     * LONG_TERM_DEBT (all LIABILITY), ADDITIONAL_PAID_IN_CAPITAL,
+     * TREASURY_STOCK (EQUITY), FINANCIAL_INCOME (REVENUE), and
+     * COST_OF_GOODS_SOLD / COST_OF_SERVICES (COST) -- 15 of the 44
+     * categories were rejected as "mismatched" even though they are
+     * perfectly legitimate for their class. This is exactly what the user
+     * hit editing an existing, correctly-classified CASH_AND_EQUIVALENTS/
+     * ASSET account (110505): the request-level pre-check in
+     * ChartOfAccountService passed (it already used belongsToClass
+     * correctly), but this entity-level @PreUpdate callback re-checked
+     * with the broken heuristic and rejected it anyway during flush.
+     * Delegating to belongsToClass() removes the duplicate logic entirely,
+     * so this can never drift from the real mapping again.
      */
     private void validateCategoryMatchesClass() {
         if (accountClass == null || accountCategory == null) {
             return; // Will be caught by nullable constraint
         }
 
-        boolean isValid = switch (accountClass) {
-            case ASSET -> accountCategory.name().contains("ASSET") ||
-                    accountCategory == AccountCategory.INVESTMENT;
-            case LIABILITY -> accountCategory.name().contains("LIABILITY") ||
-                    accountCategory == AccountCategory.TAXES_PAYABLE;
-            case EQUITY -> accountCategory.name().contains("EQUITY") ||
-                    accountCategory == AccountCategory.RETAINED_EARNINGS ||
-                    accountCategory == AccountCategory.SHARE_CAPITAL ||
-                    accountCategory == AccountCategory.CURRENT_YEAR_PROFIT ||
-                    accountCategory == AccountCategory.RESERVES;
-            case REVENUE -> accountCategory.name().contains("REVENUE");
-            case EXPENSE -> accountCategory.name().contains("EXPENSE") ||
-                    accountCategory == AccountCategory.TAX_EXPENSE;
-            case COST -> accountCategory == AccountCategory.COST_OF_SALES;
-        };
-
-        if (!isValid) {
+        if (!accountCategory.belongsToClass(accountClass)) {
             throw new InvalidOperationException(
                     String.format("Account category %s does not match account class %s",
                             accountCategory, accountClass),
