@@ -101,6 +101,22 @@ public interface JournalEntryRepository extends JpaRepository<JournalEntry, Long
     /**
      * Calculates account balances for the Trial Balance report.
      * ADAPTED: Evaluates a.company.id against the primitive Long parameter.
+     *
+     * BUG FIX (2026-09-08): dropped "AND a.active = true". This report is
+     * explicitly generated for an arbitrary past asOfDate (see
+     * FinancialStatementService.getBalanceSheet), but the CURRENT active
+     * flag has nothing to do with whether the account legitimately had a
+     * balance as of that historical date -- deactivating an account (e.g.
+     * closing an old bank account) is meant to block its use in NEW entries
+     * only, per the deactivate() docs ("Historical transactions are
+     * preserved... Deactivated accounts remain visible in historical
+     * reports"). Filtering on current active status here made a Balance
+     * Sheet for a PAST date silently drop any account deactivated since
+     * then, even though it correctly had a balance on that date. Safe to
+     * remove: an inactive account with no real postings simply never
+     * matches the join to JournalEntryItem in the first place, so this
+     * can't resurrect zero-activity dead accounts -- only genuinely
+     * historical balances.
      */
     @Query("""
         SELECT 
@@ -115,7 +131,6 @@ public interface JournalEntryRepository extends JpaRepository<JournalEntry, Long
           AND je.entryDate <= :asOfDate
           AND je.active = true
           AND a.postingAccount = true
-          AND a.active = true
         GROUP BY a.code, a.nature
         ORDER BY a.code
     """)

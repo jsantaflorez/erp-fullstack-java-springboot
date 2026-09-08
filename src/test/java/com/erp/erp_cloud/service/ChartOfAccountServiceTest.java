@@ -304,6 +304,52 @@ class ChartOfAccountServiceTest {
     }
 
     @Test
+    @DisplayName("update() rejects removing posting-account status when the account already has journal entry movements (REGRESSION GUARD)")
+    void update_removePostingAccountWithMovements_throws() {
+        // User-reported (2026-09-07): unchecking "Cuenta de Movimiento" on
+        // account 110505 -- which already has journal entries posted to it
+        // -- silently succeeded, even though every reporting query
+        // (getTrialBalance, getAccountsForBalanceSheet, ...) only ever
+        // looks at postingAccount = true leaves. This would have made its
+        // historical movements vanish from every report without touching
+        // the underlying entries. existsByCompanyIdAndAccount already
+        // existed in the repository for exactly this check but nothing
+        // called it.
+        ChartOfAccounts existing = existingAccount(5L, "110505", (byte) 3, true, AccountClass.ASSET, null);
+        when(repository.findByIdAndCompany(5L, COMPANY_ID)).thenReturn(Optional.of(existing));
+        when(repository.existsByCompanyIdAndAccount(COMPANY_ID, existing)).thenReturn(true);
+
+        ChartOfAccountRequest request = baseRequest("110505", false, null); // same code, now posting=false
+
+        assertThatThrownBy(() -> service.update(5L, request))
+                .isInstanceOfSatisfying(InvalidOperationException.class, ex -> {
+                    assertThat(ex.getMessage()).contains("journal entry movements");
+                    assertThat(ex.getErrorCode()).isEqualTo("POSTING_ACCOUNT_HAS_MOVEMENTS");
+                });
+    }
+
+    @Test
+    @DisplayName("update() allows removing posting-account status when the account has no journal entry movements")
+    void update_removePostingAccountWithoutMovements_succeeds() {
+        // Needs a real parent in the hierarchy ("1105", 4 digits) so
+        // validateCodeStructure sees "110505" (6 digits) as a valid +2
+        // digit jump instead of being treated as a (invalid) root code --
+        // request.parentId is left null here (no parent change requested),
+        // so the service falls back to existing.getParent() for that check.
+        ChartOfAccounts parent = existingAccount(2L, "1105", (byte) 2, false, AccountClass.ASSET, null);
+        ChartOfAccounts existing = existingAccount(5L, "110505", (byte) 3, true, AccountClass.ASSET, parent);
+        when(repository.findByIdAndCompany(5L, COMPANY_ID)).thenReturn(Optional.of(existing));
+        when(repository.existsByCompanyIdAndAccount(COMPANY_ID, existing)).thenReturn(false);
+        when(repository.save(any(ChartOfAccounts.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        ChartOfAccountRequest request = baseRequest("110505", false, null); // same code, now posting=false
+
+        ChartOfAccountResponseDTO result = service.update(5L, request);
+
+        assertThat(result.isPostingAccount()).isFalse();
+    }
+
+    @Test
     @DisplayName("update() rejects setting an account as its own parent")
     void update_selfAsParent_throws() {
         ChartOfAccounts existing = existingAccount(5L, "1105", (byte) 3, false, AccountClass.ASSET, null);

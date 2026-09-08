@@ -137,6 +137,31 @@ public class ChartOfAccountService extends TenantAwareService {
             }
         }
 
+        // BUSINESS RULE (2026-09-07, user-reported): the mirror-image case
+        // of the rule above. A posting account is the ONLY kind of account
+        // journal entry items are allowed to reference; every reporting
+        // query in ChartOfAccountsRepository (getTrialBalance,
+        // getAccountsForBalanceSheet, getOpeningBalances, getPeriodActivity,
+        // getAccountsForIncomeStatement...) filters strictly on
+        // postingAccount = true to decide what counts as a real leaf with
+        // movements. Turning postingAccount OFF on an account that already
+        // has journal entry items would silently drop its historical
+        // movements out of every one of those reports while leaving the
+        // underlying entries untouched — a data-integrity trap, not just a
+        // UX nicety. The repository already had existsByCompanyIdAndAccount
+        // defined for exactly this ("Used to prevent deletion/deactivation
+        // of accounts with movements") but nothing ever called it; before
+        // this fix, unchecking "Cuenta de Movimiento" on an account with
+        // existing entries (e.g. account 110505) succeeded silently.
+        if (Boolean.FALSE.equals(request.getPostingAccount()) && existing.isPostingAccount()) {
+            if (repository.existsByCompanyIdAndAccount(currentTenantId(), existing)) {
+                throw new InvalidOperationException(
+                        "Cannot remove posting-account status — this account already has journal entry movements.",
+                        "POSTING_ACCOUNT_HAS_MOVEMENTS"
+                );
+            }
+        }
+
         // INTENTIONAL: Account class changes are allowed even with existing transactions.
         // Rationale: Accountants may reclassify accounts retroactively for reporting purposes.
         // Historical transactions are preserved; only future reporting is affected.
@@ -208,6 +233,19 @@ public class ChartOfAccountService extends TenantAwareService {
      * INTENTIONAL: Deactivation is allowed even on accounts with existing transactions.
      * Historical data integrity is preserved — only new usage is blocked.
      * Deactivated accounts remain visible in historical reports.
+     *
+     * BUG FIX (2026-09-08): that last sentence was previously false in
+     * practice -- every date-scoped reporting query (Balance Sheet, Income
+     * Statement, Trial Balance as of date, opening balances, period
+     * activity) filtered on the account's CURRENT active flag, so
+     * deactivating an account silently erased its historical balances from
+     * any report covering a date it was still active for. Those queries
+     * (ChartOfAccountsRepository / JournalEntryRepository) no longer filter
+     * on active for historical reporting -- postingAccount = true plus the
+     * date range is what actually decides inclusion now, which is also why
+     * update() blocks removing postingAccount once an account has real
+     * movements (see POSTING_ACCOUNT_HAS_MOVEMENTS above): that invariant
+     * is what keeps these reports trustworthy.
      */
     public void deactivate(Long id) {
         log.debug("Deactivating account | id: {} | tenant: {}", id, currentTenantId());

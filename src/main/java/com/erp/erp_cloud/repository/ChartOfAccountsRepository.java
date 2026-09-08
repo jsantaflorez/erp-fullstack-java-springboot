@@ -68,6 +68,10 @@ public interface ChartOfAccountsRepository extends TenantAwareRepository<ChartOf
             "AND c.postingAccount = true " +
             "AND c.active = true")
     Page<ChartOfAccounts> findPostingAccounts(@Param("companyId") Long companyId, Pageable pageable);
+    // NOTE: findPostingAccounts is a present-tense picklist (e.g. account
+    // pickers in the UI) -- unlike the historical reporting queries below,
+    // it's correct for it to only offer currently-active accounts, so its
+    // "active = true" filter is intentionally left as-is.
 
     /**
      * Functional searches for UI using custom JPQL to ensure multi-tenant security.
@@ -127,13 +131,18 @@ public interface ChartOfAccountsRepository extends TenantAwareRepository<ChartOf
           AND a.accountClass = :accountClass
           AND a.financialStatement = 'BALANCE_SHEET'
           AND a.postingAccount = true
-          AND a.active = true
         ORDER BY a.displayOrder, a.code
     """)
     List<Object[]> getAccountsForBalanceSheet(
             @Param("companyId") Long companyId,
             @Param("accountClass") AccountClass accountClass
     );
+    // (query above intentionally dropped "AND a.active = true" -- see the
+    // BUG FIX note on getAccountBalancesAsOfDate in JournalEntryRepository
+    // for why. FinancialStatementService.buildSectionsForClass() already
+    // discards any account whose balance comes back zero, so this can't
+    // bring back deactivated accounts that never had real activity --
+    // only ones with a genuine historical balance.)
 
     /**
      * Generates Trial Balance as of a specific date.
@@ -151,7 +160,6 @@ public interface ChartOfAccountsRepository extends TenantAwareRepository<ChartOf
         WHERE a.company.id = :companyId
           AND je.entryDate <= :asOfDate
           AND a.postingAccount = true
-          AND a.active = true
         GROUP BY a.code, a.name
         ORDER BY a.code ASC
     """)
@@ -176,7 +184,6 @@ public interface ChartOfAccountsRepository extends TenantAwareRepository<ChartOf
         WHERE a.company.id = :companyId
           AND je.entryDate < :startDate
           AND a.postingAccount = true
-          AND a.active = true
           AND a.closesAtYearEnd = false
         GROUP BY a.code, a.nature
     """)
@@ -202,7 +209,6 @@ public interface ChartOfAccountsRepository extends TenantAwareRepository<ChartOf
           AND je.entryDate < :startDate
           AND a.code BETWEEN :startAccount AND :endAccount
           AND a.postingAccount = true
-          AND a.active = true
         GROUP BY a.code, a.nature
         ORDER BY a.code ASC
     """)
@@ -231,7 +237,6 @@ public interface ChartOfAccountsRepository extends TenantAwareRepository<ChartOf
           AND je.entryDate >= :startDate
           AND je.entryDate <= :endDate
           AND a.postingAccount = true
-          AND a.active = true
         GROUP BY a.code, a.name, a.accountClass, a.closesAtYearEnd
         ORDER BY a.code
     """)
@@ -264,7 +269,6 @@ public interface ChartOfAccountsRepository extends TenantAwareRepository<ChartOf
           AND a.financialStatement = 'INCOME_STATEMENT'
           AND a.closesAtYearEnd = true
           AND a.postingAccount = true
-          AND a.active = true
           AND je.entryDate >= :startDate
           AND je.entryDate <= :endDate
         GROUP BY a.code, a.name, a.accountCategory, a.displayOrder, a.nature
@@ -306,7 +310,6 @@ public interface ChartOfAccountsRepository extends TenantAwareRepository<ChartOf
           AND a.financialStatement = 'INCOME_STATEMENT'
           AND a.closesAtYearEnd = true
           AND a.postingAccount = true
-          AND a.active = true
           AND je.entryDate >= :startDate
           AND je.entryDate <= :endDate
         GROUP BY a.code, a.name, a.accountCategory, a.displayOrder, a.nature
