@@ -8,6 +8,7 @@ import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
@@ -40,7 +41,7 @@ public class TrialBalanceReport {
     /**
      * When this report was generated.
      */
-    private LocalDate generatedAt;
+    private LocalDateTime generatedAt;
 
     /**
      * List of all account lines with their balances.
@@ -63,7 +64,14 @@ public class TrialBalanceReport {
      * TRUE = System is in balance (normal state)
      * FALSE = System is out of balance (ERROR - should never happen!)
      */
-    private boolean isBalanced;
+    private boolean balanced;
+
+    // NOTE: field is "balanced", not "isBalanced" -- Lombok still
+    // generates isBalanced() as the getter (its usual boolean prefix
+    // rule), but Jackson serializes that getter by stripping "is", so
+    // a field literally named "isBalanced" would silently serialize as
+    // JSON key "balanced" anyway. Naming the field "balanced" makes the
+    // Java source match what actually goes over the wire.
 
     /**
      * Summary of net balances grouped by account class.

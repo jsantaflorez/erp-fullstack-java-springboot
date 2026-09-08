@@ -28,6 +28,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -740,5 +741,43 @@ class JournalEntryServiceTest {
         assertThatThrownBy(() -> service.update(999L, balancedRequest(entry.getEntryDate())))
                 .isInstanceOf(InvalidOperationException.class)
                 .hasMessageContaining("CLOSED");
+    }
+
+    // ============================================================
+    // Trial Balance reports -- regression coverage for a bug where
+    // companyName was never populated (builder simply omitted it) and
+    // generatedAt was a bare LocalDate, so exported PDF/Excel headers
+    // (which need company name + generation date AND time) had no
+    // company to show and no time component.
+    // ============================================================
+
+    @Test
+    @DisplayName("getTrialBalanceReport() populates companyName and a generatedAt with a time component")
+    void getTrialBalanceReport_populatesCompanyNameAndGeneratedAt() {
+        testCompany.setLegalName("ERP Demo Company S.A.S.");
+        when(accountRepository.getTrialBalance(eq(COMPANY_ID), any(LocalDate.class)))
+                .thenReturn(new ArrayList<>());
+
+        var report = service.getTrialBalanceReport(LocalDate.now());
+
+        assertThat(report.getCompanyName()).isEqualTo("ERP Demo Company S.A.S.");
+        assertThat(report.getGeneratedAt()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("getTrialBalanceDetailed() populates companyName and a generatedAt with a time component")
+    void getTrialBalanceDetailed_populatesCompanyNameAndGeneratedAt() {
+        testCompany.setLegalName("ERP Demo Company S.A.S.");
+        LocalDate start = LocalDate.now().minusDays(30);
+        LocalDate end = LocalDate.now();
+        when(accountRepository.getOpeningBalances(eq(COMPANY_ID), any(LocalDate.class)))
+                .thenReturn(new ArrayList<>());
+        when(accountRepository.getPeriodActivity(eq(COMPANY_ID), any(LocalDate.class), any(LocalDate.class)))
+                .thenReturn(new ArrayList<>());
+
+        var report = service.getTrialBalanceDetailed(start, end);
+
+        assertThat(report.getCompanyName()).isEqualTo("ERP Demo Company S.A.S.");
+        assertThat(report.getGeneratedAt()).isNotNull();
     }
 }

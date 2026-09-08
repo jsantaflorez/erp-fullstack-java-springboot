@@ -43,7 +43,7 @@ public class TrialBalanceLineDetailed {
      * TRUE = Classes 1, 2, 3 (Asset, Liability, Equity) - permanent accounts
      * FALSE = Classes 4, 5, 6, 7 (Revenue, Expense, Cost) - temporary accounts
      */
-    private boolean isBalanceSheetAccount;
+    private boolean balanceSheetAccount;
 
     /**
      * Opening balance at the start of the period.

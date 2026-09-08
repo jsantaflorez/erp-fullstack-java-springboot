@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
 /**
@@ -41,7 +42,7 @@ public class BalanceSheetReport {
     /**
      * When this report was generated.
      */
-    private LocalDate generatedAt;
+    private LocalDateTime generatedAt;
 
     // ═══════════════════════════════════════════════════════════
     // ASSETS SECTION
@@ -106,7 +107,7 @@ public class BalanceSheetReport {
      * TRUE if: Assets = Liabilities + Equity (within rounding tolerance)
      * FALSE if: The equation doesn't hold (indicates data error)
      */
-    private boolean isBalanced;
+    private boolean balanced;
 
     // ═══════════════════════════════════════════════════════════
     // HELPER METHODS

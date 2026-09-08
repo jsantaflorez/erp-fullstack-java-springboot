@@ -18,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.*;
 
 @Service
@@ -96,8 +97,8 @@ public class FinancialStatementService extends TenantAwareService {
                 .totalLiabilities(totalLiabilities)
                 .totalEquity(totalEquity)
                 .totalLiabilitiesAndEquity(totalLiabilities.add(totalEquity))
-                .isBalanced(isBalanced)
-                .generatedAt(LocalDate.now())
+                .balanced(isBalanced)
+                .generatedAt(LocalDateTime.now())
                 .build();
 
         log.info("Balance Sheet generated successfully. Assets: {}, L+E: {}, Balanced: {}",
@@ -352,7 +353,7 @@ public class FinancialStatementService extends TenantAwareService {
                 .companyName(company.getLegalName())
                 .startDate(startDate)
                 .endDate(endDate)
-                .generatedAt(LocalDate.now())
+                .generatedAt(LocalDateTime.now())
                 .revenueSections(revenueSections)
                 .totalRevenue(totalRevenue.setScale(2, RoundingMode.HALF_UP))
                 .costSections(costSections)

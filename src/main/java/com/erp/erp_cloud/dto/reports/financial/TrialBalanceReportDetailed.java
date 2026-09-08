@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
@@ -44,7 +45,7 @@ public class TrialBalanceReportDetailed {
     /**
      * When this report was generated.
      */
-    private LocalDate generatedAt;
+    private LocalDateTime generatedAt;
 
     /**
      * List of all account lines with opening balances and movements.
@@ -82,7 +83,7 @@ public class TrialBalanceReportDetailed {
      * TRUE = System is in balance (normal state)
      * FALSE = System is out of balance (ERROR)
      */
-    private boolean isBalanced;
+    private boolean balanced;
 
     /**
      * Summary of closing balances grouped by account class.

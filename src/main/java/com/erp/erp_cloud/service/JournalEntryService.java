@@ -17,6 +17,7 @@ import com.erp.erp_cloud.dto.reports.financial.TrialBalanceReport;
 
 import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 import com.erp.erp_cloud.service.base.TenantAwareService;
 import lombok.RequiredArgsConstructor;
@@ -513,12 +514,13 @@ public class JournalEntryService extends TenantAwareService {
         }
 
         return TrialBalanceReport.builder()
+                .companyName(companyRepository.getReferenceById(companyId).getLegalName())
                 .asOfDate(asOfDate)
-                .generatedAt(LocalDate.now())
+                .generatedAt(LocalDateTime.now())
                 .lines(lines)
                 .totalDebit(totalDebit)
                 .totalCredit(totalCredit)
-                .isBalanced(isBalanced)
+                .balanced(isBalanced)
                 .summary(summary)
                 .build();
     }
@@ -580,7 +582,7 @@ public class JournalEntryService extends TenantAwareService {
                     .accountCode(code)
                     .accountName(name)
                     .accountClass(classDisplay)
-                    .isBalanceSheetAccount(!closesAtYearEnd)
+                    .balanceSheetAccount(!closesAtYearEnd)
                     .openingBalance(opening)
                     .periodDebit(periodDebit)
                     .periodCredit(periodCredit)
@@ -608,44 +610,53 @@ public class JournalEntryService extends TenantAwareService {
         }
 
         return TrialBalanceReportDetailed.builder()
+                .companyName(companyRepository.getReferenceById(companyId).getLegalName())
                 .startDate(startDate)
                 .endDate(endDate)
-                .generatedAt(LocalDate.now())
+                .generatedAt(LocalDateTime.now())
                 .lines(lines)
                 .totalOpeningBalance(totalOpeningBalance.setScale(2, RoundingMode.HALF_UP))
                 .totalPeriodDebit(totalPeriodDebit.setScale(2, RoundingMode.HALF_UP))
                 .totalPeriodCredit(totalPeriodCredit.setScale(2, RoundingMode.HALF_UP))
                 .totalNetMovement(totalNetMovement.setScale(2, RoundingMode.HALF_UP))
                 .totalClosingBalance(totalClosingBalance.setScale(2, RoundingMode.HALF_UP))
-                .isBalanced(isBalanced)
+                .balanced(isBalanced)
                 .summaryByClass(summaryByClass)
                 .build();
     }
 
+    // NOTE (2026-09-08): these used to return hardcoded English display
+    // strings (e.g. "1 - Assets") that went straight into the summary Map
+    // key -- fine as long as nothing rendered them, but the moment the
+    // frontend put "Resumen por Clase" on screen, a Spanish-language user
+    // saw "1 - Assets" with no way to translate it (the key WAS the
+    // display text). Returning a bare, language-neutral code instead lets
+    // the frontend translate it for display, same as every other
+    // backend-owned code in this app (see apiErrors.js on the frontend).
     private String getAccountClassDisplay(AccountClass accountClass) {
         return switch (accountClass) {
-            case ASSET -> "1 - Assets";
-            case LIABILITY -> "2 - Liabilities";
-            case EQUITY -> "3 - Equity";
-            case REVENUE -> "4 - Revenue";
-            case EXPENSE -> "5 - Expenses";
-            case COST -> "6/7 - Costs";
+            case ASSET -> "1";
+            case LIABILITY -> "2";
+            case EQUITY -> "3";
+            case REVENUE -> "4";
+            case EXPENSE -> "5";
+            case COST -> "6-7";
         };
     }
 
     private String getAccountClassName(String code) {
         if (code == null || code.isEmpty()) {
-            return "Other";
+            return "OTHER";
         }
         char firstDigit = code.charAt(0);
         return switch (firstDigit) {
-            case '1' -> "1 - Assets";
-            case '2' -> "2 - Liabilities";
-            case '3' -> "3 - Equity";
-            case '4' -> "4 - Revenue";
-            case '5' -> "5 - Expenses";
-            case '6', '7' -> "6/7 - Costs";
-            default -> "Other";
+            case '1' -> "1";
+            case '2' -> "2";
+            case '3' -> "3";
+            case '4' -> "4";
+            case '5' -> "5";
+            case '6', '7' -> "6-7";
+            default -> "OTHER";
         };
     }
 
